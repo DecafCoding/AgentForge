@@ -1,0 +1,100 @@
+services:
+
+  # ---------------------------------------------------------------------------
+  # Bundled infrastructure — laptop / dev mode only.
+  # Start with: docker compose --profile bundled up
+  # ---------------------------------------------------------------------------
+
+  supabase-db:
+    image: pgvector/pgvector:pg15
+    profiles: ["bundled"]
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agentforge
+    volumes:
+      - supabase-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  langfuse-db:
+    image: postgres:15
+    profiles: ["bundled"]
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  langfuse-server:
+    image: langfuse/langfuse:2
+    profiles: ["bundled"]
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_URL: http://localhost:3001
+      # Change these secrets before exposing Langfuse outside localhost.
+      NEXTAUTH_SECRET: change-me-in-production
+      SALT: change-me-in-production
+      TELEMETRY_ENABLED: "false"
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/public/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # App container — always starts regardless of profile.
+  # Connects to bundled services by default; override via .env for shared infra.
+  # ---------------------------------------------------------------------------
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    # Load user-supplied overrides from .env; the environment block below
+    # sets defaults that point at the bundled services.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@supabase-db:5432/agentforge}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse-server:3000}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
+      MODEL_NAME: ${MODEL_NAME:-gpt-4o}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      COLLECTION_INTERVAL_MINUTES: ${COLLECTION_INTERVAL_MINUTES:-60}
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+        required: false
+      langfuse-server:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+volumes:
+  supabase-data:
+  langfuse-data:

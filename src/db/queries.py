@@ -1,0 +1,267 @@
+"""
+Database query functions.
+
+All SQL in the application lives here. Collectors and agents call these
+typed async functions — no raw SQL is permitted outside this module. Every
+function accepts an asyncpg Pool and returns typed Pydantic models, never
+raw rows or dicts. This module belongs to the Data Layer.
+"""
+
+import logging
+from datetime import datetime
+from uuid import UUID
+
+from asyncpg import Pool
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Data models — reflect the database schema exactly
+# ---------------------------------------------------------------------------
+
+
+class ChannelRecord(BaseModel):
+    """A YouTube channel row from the youtube_channels table."""
+
+    id: UUID
+    channel_id: str
+    channel_name: str
+    created_at: datetime
+
+
+class VideoRecord(BaseModel):
+    """A YouTube video row from the youtube_videos table.
+
+    The ``embedding`` column is excluded from all queries in this module;
+    it will be populated and queried separately once vector search is wired up.
+    """
+
+    id: UUID
+    video_id: str
+    channel_id: str
+    title: str
+    description: str | None = None
+    published_at: datetime | None = None
+    view_count: int | None = None
+    like_count: int | None = None
+    comment_count: int | None = None
+    duration: str | None = None
+    transcript: str | None = None
+    collected_at: datetime
+    updated_at: datetime
+
+
+class VideoSummary(BaseModel):
+    """Lightweight video projection used by agent tools.
+
+    Contains only the fields the agent needs to construct a response,
+    keeping token usage low.
+    """
+
+    video_id: str
+    channel_id: str
+    title: str
+    published_at: datetime | None = None
+    view_count: int | None = None
+    url: str = Field(default="")
+
+    def model_post_init(self, __context: object) -> None:
+        """Derive the YouTube watch URL from video_id."""
+        if not self.url:
+            self.url = f"https://www.youtube.com/watch?v={self.video_id}"
+
+
+class ChannelStats(BaseModel):
+    """Aggregate statistics for a single YouTube channel."""
+
+    channel_id: str
+    channel_name: str
+    video_count: int
+    total_views: int
+    latest_video_at: datetime | None = None
+
+
+# ---------------------------------------------------------------------------
+# Channel queries
+# ---------------------------------------------------------------------------
+
+
+async def get_channels(pool: Pool) -> list[ChannelRecord]:
+    """Return all tracked YouTube channels ordered by creation date."""
+    rows = await pool.fetch(
+        "SELECT id, channel_id, channel_name, created_at "
+        "FROM youtube_channels ORDER BY created_at ASC",
+    )
+    return [ChannelRecord(**dict(row)) for row in rows]
+
+
+async def upsert_channel(pool: Pool, channel_id: str, channel_name: str) -> None:
+    """Insert a channel or update its name if the channel_id already exists.
+
+    Args:
+        pool: asyncpg connection pool.
+        channel_id: YouTube channel identifier (e.g. ``UCxxxxxx``).
+        channel_name: Human-readable display name of the channel.
+    """
+    await pool.execute(
+        """
+        INSERT INTO youtube_channels (channel_id, channel_name)
+        VALUES ($1, $2)
+        ON CONFLICT (channel_id) DO UPDATE SET channel_name = EXCLUDED.channel_name
+        """,
+        channel_id,
+        channel_name,
+    )
+    logger.debug("Upserted channel", extra={"channel_id": channel_id})
+
+
+# ---------------------------------------------------------------------------
+# Video queries
+# ---------------------------------------------------------------------------
+
+
+async def get_videos(
+    pool: Pool,
+    channel_id: str,
+    limit: int = 20,
+) -> list[VideoRecord]:
+    """Fetch the most recent videos for a channel.
+
+    Args:
+        pool: asyncpg connection pool.
+        channel_id: YouTube channel identifier.
+        limit: Maximum number of videos to return.
+
+    Returns:
+        List of video records ordered by published date descending.
+    """
+    rows = await pool.fetch(
+        """
+        SELECT id, video_id, channel_id, title, description,
+               published_at, view_count, like_count, comment_count,
+               duration, transcript, collected_at, updated_at
+        FROM youtube_videos
+        WHERE channel_id = $1
+        ORDER BY published_at DESC
+        LIMIT $2
+        """,
+        channel_id,
+        limit,
+    )
+    return [VideoRecord(**dict(row)) for row in rows]
+
+
+async def search_videos(pool: Pool, query: str, limit: int = 10) -> list[VideoSummary]:
+    """Search videos by title and description using full-text search.
+
+    Args:
+        pool: asyncpg connection pool.
+        query: Search terms to match against title and description.
+        limit: Maximum number of results to return.
+
+    Returns:
+        List of matching video summaries ordered by relevance.
+    """
+    rows = await pool.fetch(
+        """
+        SELECT video_id, channel_id, title, published_at, view_count
+        FROM youtube_videos
+        WHERE to_tsvector('english', title || ' ' || COALESCE(description, ''))
+              @@ plainto_tsquery('english', $1)
+        ORDER BY published_at DESC
+        LIMIT $2
+        """,
+        query,
+        limit,
+    )
+    return [VideoSummary(**dict(row)) for row in rows]
+
+
+async def get_channel_stats(pool: Pool, channel_id: str) -> ChannelStats | None:
+    """Return aggregate statistics for a single channel.
+
+    Args:
+        pool: asyncpg connection pool.
+        channel_id: YouTube channel identifier.
+
+    Returns:
+        Aggregated stats, or None if the channel does not exist.
+    """
+    row = await pool.fetchrow(
+        """
+        SELECT
+            c.channel_id,
+            c.channel_name,
+            COUNT(v.id)::int          AS video_count,
+            COALESCE(SUM(v.view_count), 0)::int AS total_views,
+            MAX(v.published_at)       AS latest_video_at
+        FROM youtube_channels c
+        LEFT JOIN youtube_videos v ON v.channel_id = c.channel_id
+        WHERE c.channel_id = $1
+        GROUP BY c.channel_id, c.channel_name
+        """,
+        channel_id,
+    )
+    if row is None:
+        return None
+    return ChannelStats(**dict(row))
+
+
+async def upsert_video(
+    pool: Pool,
+    video_id: str,
+    channel_id: str,
+    title: str,
+    description: str | None,
+    published_at: datetime | None,
+    view_count: int | None,
+    like_count: int | None,
+    comment_count: int | None,
+    duration: str | None,
+    transcript: str | None,
+) -> None:
+    """Insert a video or update its metadata if the video_id already exists.
+
+    Args:
+        pool: asyncpg connection pool.
+        video_id: YouTube video identifier.
+        channel_id: Parent channel identifier (must exist in youtube_channels).
+        title: Video title.
+        description: Video description text.
+        published_at: UTC publish timestamp.
+        view_count: View count at collection time.
+        like_count: Like count at collection time.
+        comment_count: Comment count at collection time.
+        duration: ISO 8601 duration string (e.g. ``PT4M13S``).
+        transcript: Full video transcript text, if available.
+    """
+    await pool.execute(
+        """
+        INSERT INTO youtube_videos (
+            video_id, channel_id, title, description, published_at,
+            view_count, like_count, comment_count, duration, transcript
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (video_id) DO UPDATE SET
+            title         = EXCLUDED.title,
+            description   = EXCLUDED.description,
+            view_count    = EXCLUDED.view_count,
+            like_count    = EXCLUDED.like_count,
+            comment_count = EXCLUDED.comment_count,
+            duration      = EXCLUDED.duration,
+            transcript    = EXCLUDED.transcript,
+            updated_at    = NOW()
+        """,
+        video_id,
+        channel_id,
+        title,
+        description,
+        published_at,
+        view_count,
+        like_count,
+        comment_count,
+        duration,
+        transcript,
+    )
+    logger.debug("Upserted video", extra={"video_id": video_id})

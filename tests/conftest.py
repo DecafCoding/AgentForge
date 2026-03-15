@@ -1,0 +1,52 @@
+"""
+Shared test fixtures.
+
+Provides mocked infrastructure (database pool, HTTP client) so that unit
+and integration tests can run without external services. Tests that
+require a real database should opt in via a separate fixture.
+"""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+
+@pytest.fixture
+def mock_pool():
+    """Return a mock asyncpg Pool with no-op async methods.
+
+    The default return values (empty list / None) cover the common case
+    where the database has no data. Override specific methods per test
+    when populated results are needed.
+    """
+    pool = MagicMock()
+    pool.fetch = AsyncMock(return_value=[])
+    pool.fetchrow = AsyncMock(return_value=None)
+    pool.execute = AsyncMock(return_value=None)
+    pool.close = AsyncMock()
+    return pool
+
+
+@pytest.fixture
+async def client(mock_pool):
+    """Return an httpx AsyncClient backed by the FastAPI app.
+
+    The database pool and APScheduler are mocked so no external services
+    are needed. Langfuse validation is also suppressed so missing keys
+    do not produce warning noise in test output.
+    """
+    # Import after patching is set up so the lifespan picks up the mocks.
+    from src.api.main import app
+
+    with (
+        patch("src.api.main.create_pool", AsyncMock(return_value=mock_pool)),
+        patch("src.api.main.start_scheduler", AsyncMock()),
+        patch("src.api.main.shutdown_scheduler", AsyncMock()),
+        patch("src.api.main.validate_provider_config"),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            yield ac
