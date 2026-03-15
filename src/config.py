@@ -47,6 +47,12 @@ LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "")
 YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
 COLLECTION_INTERVAL_MINUTES: int = int(os.getenv("COLLECTION_INTERVAL_MINUTES", "60"))
 
+# ---------------------------------------------------------------------------
+# Memory (Phase 3)
+# ---------------------------------------------------------------------------
+MEMORY_ENABLED: bool = os.getenv("MEMORY_ENABLED", "true").lower() == "true"
+MEMORY_MODEL: str = os.getenv("MEMORY_MODEL", "gpt-4o-mini")
+
 
 def get_model_string() -> str:
     """Return the model identifier Pydantic AI expects for the configured provider.

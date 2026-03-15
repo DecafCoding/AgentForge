@@ -20,6 +20,8 @@ dependencies = [
     "httpx>=0.28.0",
     # Multi-agent orchestration
     "langgraph>=0.2.0",
+    # Long-term memory
+    "mem0ai>=1.0.0,<2.0.0",
     # Observability
     "langfuse>=2.0.0,<3.0.0",
     # Environment
