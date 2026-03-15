@@ -86,6 +86,8 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       COLLECTION_INTERVAL_MINUTES: ${COLLECTION_INTERVAL_MINUTES:-60}
+      MEMORY_ENABLED: ${MEMORY_ENABLED:-true}
+      MEMORY_MODEL: ${MEMORY_MODEL:-gpt-4o-mini}
     depends_on:
       supabase-db:
         condition: service_healthy

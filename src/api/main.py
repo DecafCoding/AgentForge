@@ -17,6 +17,7 @@ from src.api.routes import router
 from src.collector.scheduler import shutdown_scheduler, start_scheduler
 from src.config import validate_provider_config
 from src.db.client import close_pool, create_pool
+from src.memory.client import create_memory_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +29,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Startup order:
       1. Create asyncpg connection pool
       2. Start APScheduler with the pool injected into collector jobs
+      3. Initialise Mem0 memory client (if enabled)
 
     Shutdown order (reverse):
-      1. Stop APScheduler gracefully
-      2. Close the connection pool
+      1. Release memory store reference
+      2. Stop APScheduler gracefully
+      3. Close the connection pool
     """
     logger.info("Starting up AgentForge")
     validate_provider_config()
@@ -39,10 +42,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.pool = await create_pool()
     await start_scheduler(app.state.pool)
 
+    try:
+        memory_client = await create_memory_client()
+        if memory_client is not None:
+            from src.memory.store import Mem0MemoryStore
+
+            app.state.memory = Mem0MemoryStore(memory_client)
+            logger.info("Memory store initialised")
+        else:
+            app.state.memory = None
+    except Exception as exc:
+        logger.error(
+            "Memory initialisation failed — continuing without memory",
+            extra={"error": str(exc)},
+        )
+        app.state.memory = None
+
     logger.info("AgentForge ready")
     yield
 
     logger.info("Shutting down AgentForge")
+    app.state.memory = None
     await shutdown_scheduler()
     await close_pool(app.state.pool)
     logger.info("AgentForge stopped")

@@ -64,6 +64,8 @@ jobs:
       LANGFUSE_PUBLIC_KEY: ""
       LANGFUSE_SECRET_KEY: ""
       YOUTUBE_API_KEY: ""
+      MEMORY_ENABLED: "false"
+      MEMORY_MODEL: "gpt-4o-mini"
 
     steps:
       - uses: actions/checkout@v4

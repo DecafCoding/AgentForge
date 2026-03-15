@@ -29,12 +29,23 @@ def mock_pool():
 
 
 @pytest.fixture
+def mock_memory_store():
+    """Return a mock BaseMemoryStore with no-op async methods."""
+    store = MagicMock()
+    store.add = AsyncMock(return_value="mem-test-123")
+    store.search = AsyncMock(return_value=[])
+    store.get_all = AsyncMock(return_value=[])
+    store.delete = AsyncMock()
+    return store
+
+
+@pytest.fixture
 async def client(mock_pool):
     """Return an httpx AsyncClient backed by the FastAPI app.
 
-    The database pool and APScheduler are mocked so no external services
-    are needed. Langfuse validation is also suppressed so missing keys
-    do not produce warning noise in test output.
+    The database pool, APScheduler, and memory client are mocked so no
+    external services are needed. Langfuse validation is also suppressed
+    so missing keys do not produce warning noise in test output.
     """
     # ASGITransport sends only "http" scope events — it never triggers the ASGI
     # lifespan protocol, so the lifespan context manager never runs and
@@ -44,14 +55,18 @@ async def client(mock_pool):
 
     with (
         patch("src.api.main.create_pool", AsyncMock(return_value=mock_pool)),
+        patch("src.api.main.create_memory_client", AsyncMock(return_value=None)),
         patch("src.api.main.start_scheduler", AsyncMock()),
         patch("src.api.main.shutdown_scheduler", AsyncMock()),
         patch("src.api.main.validate_provider_config"),
     ):
         app.state.pool = mock_pool
+        app.state.memory = None  # Memory disabled in API tests by default
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://test",
         ) as ac:
             yield ac
         del app.state.pool
+        if hasattr(app.state, "memory"):
+            del app.state.memory
