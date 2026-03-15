@@ -265,3 +265,105 @@ async def upsert_video(
         transcript,
     )
     logger.debug("Upserted video", extra={"video_id": video_id})
+
+
+# ---------------------------------------------------------------------------
+# Scraped page queries
+# ---------------------------------------------------------------------------
+
+
+class ScrapedPageRecord(BaseModel):
+    """A scraped web page row from the scraped_pages table."""
+
+    id: UUID
+    url: str
+    title: str | None = None
+    content: str | None = None
+    metadata: dict = Field(default_factory=dict)
+    scraped_at: datetime
+
+
+async def upsert_scraped_page(
+    pool: Pool,
+    url: str,
+    title: str | None,
+    content: str | None,
+    metadata: dict | None = None,
+) -> None:
+    """Insert a scraped page or update its content if the URL already exists.
+
+    Args:
+        pool: asyncpg connection pool.
+        url: Page URL (unique key).
+        title: Page title extracted from metadata.
+        content: Page content as markdown text.
+        metadata: Additional page metadata as JSON.
+    """
+    import json
+
+    await pool.execute(
+        """
+        INSERT INTO scraped_pages (url, title, content, metadata, scraped_at)
+        VALUES ($1, $2, $3, $4::jsonb, NOW())
+        ON CONFLICT (url) DO UPDATE SET
+            title      = EXCLUDED.title,
+            content    = EXCLUDED.content,
+            metadata   = EXCLUDED.metadata,
+            scraped_at = NOW()
+        """,
+        url,
+        title,
+        content,
+        json.dumps(metadata or {}),
+    )
+    logger.debug("Upserted scraped page", extra={"url": url})
+
+
+async def search_scraped_pages(
+    pool: Pool,
+    query: str,
+    limit: int = 10,
+) -> list[ScrapedPageRecord]:
+    """Search scraped pages by title and content using full-text search.
+
+    Args:
+        pool: asyncpg connection pool.
+        query: Search terms to match against title and content.
+        limit: Maximum number of results.
+
+    Returns:
+        List of matching scraped page records.
+    """
+    rows = await pool.fetch(
+        """
+        SELECT id, url, title, content, metadata, scraped_at
+        FROM scraped_pages
+        WHERE to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, ''))
+              @@ plainto_tsquery('english', $1)
+        ORDER BY scraped_at DESC
+        LIMIT $2
+        """,
+        query,
+        limit,
+    )
+    return [ScrapedPageRecord(**dict(row)) for row in rows]
+
+
+async def get_scraped_page(pool: Pool, url: str) -> ScrapedPageRecord | None:
+    """Fetch a single scraped page by URL.
+
+    Args:
+        pool: asyncpg connection pool.
+        url: The page URL to look up.
+
+    Returns:
+        The scraped page record, or None if not found.
+    """
+    row = await pool.fetchrow(
+        "SELECT id, url, title, content, metadata, scraped_at "
+        "FROM scraped_pages WHERE url = $1",
+        url,
+    )
+    if row is None:
+        return None
+    return ScrapedPageRecord(**dict(row))

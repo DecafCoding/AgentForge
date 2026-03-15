@@ -66,6 +66,8 @@ jobs:
       YOUTUBE_API_KEY: ""
       MEMORY_ENABLED: "false"
       MEMORY_MODEL: "gpt-4o-mini"
+      SCRAPE_URLS: ""
+      SCRAPE_INTERVAL_MINUTES: "360"
 
     steps:
       - uses: actions/checkout@v4

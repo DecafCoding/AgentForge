@@ -33,6 +33,16 @@ COPY src/ src/
 # Prepend the venv to PATH so all uv-installed binaries are available.
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Crawl4AI requires Playwright browsers for web scraping.
+# Install system deps and browsers. The || true prevents build failure
+# in minimal environments where browsers cannot be installed.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+    libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 \
+    libgbm1 libpango-1.0-0 libcairo2 libasound2 \
+    && rm -rf /var/lib/apt/lists/*
+RUN crawl4ai-setup || true
+
 EXPOSE 8000
 
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

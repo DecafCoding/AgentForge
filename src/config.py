@@ -53,6 +53,14 @@ COLLECTION_INTERVAL_MINUTES: int = int(os.getenv("COLLECTION_INTERVAL_MINUTES", 
 MEMORY_ENABLED: bool = os.getenv("MEMORY_ENABLED", "true").lower() == "true"
 MEMORY_MODEL: str = os.getenv("MEMORY_MODEL", "gpt-4o-mini")
 
+# ---------------------------------------------------------------------------
+# Web Scraping (Phase 3)
+# ---------------------------------------------------------------------------
+SCRAPE_URLS: list[str] = [
+    u.strip() for u in os.getenv("SCRAPE_URLS", "").split(",") if u.strip()
+]
+SCRAPE_INTERVAL_MINUTES: int = int(os.getenv("SCRAPE_INTERVAL_MINUTES", "360"))
+
 
 def get_model_string() -> str:
     """Return the model identifier Pydantic AI expects for the configured provider.

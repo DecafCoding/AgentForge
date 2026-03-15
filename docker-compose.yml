@@ -88,6 +88,8 @@ services:
       COLLECTION_INTERVAL_MINUTES: ${COLLECTION_INTERVAL_MINUTES:-60}
       MEMORY_ENABLED: ${MEMORY_ENABLED:-true}
       MEMORY_MODEL: ${MEMORY_MODEL:-gpt-4o-mini}
+      SCRAPE_URLS: ${SCRAPE_URLS:-}
+      SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-360}
     depends_on:
       supabase-db:
         condition: service_healthy
