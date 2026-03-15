@@ -14,8 +14,14 @@ from apscheduler import AsyncScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from asyncpg import Pool
 
+from src.collector.web_scraper import WebScrapingCollector
 from src.collector.youtube import YouTubeCollector
-from src.config import COLLECTION_INTERVAL_MINUTES, YOUTUBE_API_KEY
+from src.config import (
+    COLLECTION_INTERVAL_MINUTES,
+    SCRAPE_INTERVAL_MINUTES,
+    SCRAPE_URLS,
+    YOUTUBE_API_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +51,21 @@ async def start_scheduler(pool: Pool) -> None:
         IntervalTrigger(minutes=COLLECTION_INTERVAL_MINUTES),
         id="youtube_collector",
     )
+
+    if SCRAPE_URLS:
+        scraper = WebScrapingCollector(pool=pool, urls=SCRAPE_URLS)
+        await _scheduler.add_schedule(
+            scraper.collect,
+            IntervalTrigger(minutes=SCRAPE_INTERVAL_MINUTES),
+            id="web_scraper",
+        )
+        logger.info(
+            "Web scraper scheduled",
+            extra={
+                "urls": len(SCRAPE_URLS),
+                "interval_minutes": SCRAPE_INTERVAL_MINUTES,
+            },
+        )
 
     logger.info(
         "Scheduler started",
