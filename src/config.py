@@ -84,8 +84,7 @@ def validate_provider_config() -> None:
     key = _required_keys.get(MODEL_PROVIDER, "")
     if not key:
         logger.warning(
-            "No API key found for provider '%s'. "
-            "Set %s in your environment.",
+            "No API key found for provider '%s'. Set %s in your environment.",
             MODEL_PROVIDER,
             f"{'OPENAI_API_KEY' if MODEL_PROVIDER == 'openai' else 'GROQ_API_KEY'}",
         )

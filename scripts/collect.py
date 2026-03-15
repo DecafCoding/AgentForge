@@ -22,8 +22,8 @@ import asyncpg
 # Ensure src/ is importable when running from the project root.
 sys.path.insert(0, ".")
 
-from src.config import DATABASE_URL, YOUTUBE_API_KEY
 from src.collector.youtube import YouTubeCollector
+from src.config import DATABASE_URL, YOUTUBE_API_KEY
 
 logging.basicConfig(
     level=logging.INFO,

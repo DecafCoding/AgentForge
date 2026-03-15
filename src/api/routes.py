@@ -11,7 +11,14 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from src.agent.agent import run_agent
-from src.api.schemas import AskRequest, AskResponse, HealthResponse
+from src.api.schemas import (
+    AskRequest,
+    AskResponse,
+    HealthResponse,
+    ResearchRequest,
+    WorkflowResponse,
+)
+from src.orchestration.graph import run_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +53,41 @@ async def ask(request: Request, body: AskRequest) -> AskResponse:
         response = await run_agent(body.question, pool)
     except Exception as exc:
         logger.error("Agent failed to answer question", extra={"error": str(exc)})
-        raise HTTPException(status_code=500, detail="Agent failed to process the request.") from exc
+        raise HTTPException(
+            status_code=500, detail="Agent failed to process the request."
+        ) from exc
 
     return AskResponse(answer=response.answer, sources=response.sources)
+
+
+@router.post("/api/research", response_model=WorkflowResponse, tags=["orchestration"])
+async def research(request: Request, body: ResearchRequest) -> WorkflowResponse:
+    """Submit a query to the multi-agent research workflow.
+
+    Runs a three-node LangGraph pipeline (research → analysis → synthesis)
+    and returns a structured, source-cited answer. The full workflow is
+    traced as a single Langfuse trace with per-node child spans.
+
+    Args:
+        request: FastAPI request object (used to access app.state.pool).
+        body: Validated request body containing the research query.
+
+    Returns:
+        Structured response with the synthesised answer and cited sources.
+    """
+    pool = request.app.state.pool
+    logger.info("Received research query", extra={"query": body.query[:120]})
+
+    try:
+        response = await run_workflow(body.query, pool)
+    except Exception as exc:
+        logger.error("Workflow failed to process query", extra={"error": str(exc)})
+        raise HTTPException(
+            status_code=500, detail="Workflow failed to process the request."
+        ) from exc
+
+    return WorkflowResponse(
+        answer=response.answer,
+        sources=response.sources,
+        confidence=response.confidence,
+    )

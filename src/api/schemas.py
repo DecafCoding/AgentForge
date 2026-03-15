@@ -33,3 +33,20 @@ class HealthResponse(BaseModel):
     """Response body for GET /health."""
 
     status: str
+
+
+class ResearchRequest(BaseModel):
+    """Request body for POST /api/research."""
+
+    query: str = Field(
+        min_length=1,
+        description="The natural-language research query to run through the multi-agent workflow.",
+    )
+
+
+class WorkflowResponse(BaseModel):
+    """Response body for POST /api/research."""
+
+    answer: str
+    sources: list[Source]
+    confidence: float

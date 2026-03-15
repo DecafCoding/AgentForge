@@ -39,7 +39,8 @@ logger = logging.getLogger(__name__)
 agent: Agent[Pool, AgentResponse] = Agent(
     model=get_model_string(),
     deps_type=Pool,
-    result_type=AgentResponse,
+    output_type=AgentResponse,
+    defer_model_check=True,
     system_prompt=(
         "You are a YouTube content research assistant. "
         "You have access to a database of YouTube video metadata and transcripts "
@@ -80,7 +81,7 @@ async def run_agent(question: str, pool: Pool) -> AgentResponse:
     if lf is None:
         # Langfuse not configured — run without tracing.
         result = await agent.run(question, deps=pool)
-        return result.data
+        return result.output
 
     trace = lf.trace(
         name="agent_run",
@@ -98,7 +99,7 @@ async def run_agent(question: str, pool: Pool) -> AgentResponse:
         usage = result.usage()
 
         generation.end(
-            output=result.data.model_dump(),
+            output=result.output.model_dump(),
             usage={
                 "input": usage.request_tokens or 0,
                 "output": usage.response_tokens or 0,
@@ -106,17 +107,17 @@ async def run_agent(question: str, pool: Pool) -> AgentResponse:
                 "unit": "TOKENS",
             },
         )
-        trace.update(output={"answer": result.data.answer})
+        trace.update(output={"answer": result.output.answer})
 
         logger.info(
             "Agent run complete",
             extra={
                 "tokens_total": usage.total_tokens,
-                "sources": len(result.data.sources),
-                "confidence": result.data.confidence,
+                "sources": len(result.output.sources),
+                "confidence": result.output.confidence,
             },
         )
-        return result.data
+        return result.output
 
     except Exception as exc:
         generation.end(level="ERROR", status_message=str(exc))

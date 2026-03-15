@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -74,7 +73,7 @@ async def test_run_agent_returns_agent_response_when_tracing_disabled(mock_pool)
     expected = _make_agent_response()
 
     mock_result = MagicMock()
-    mock_result.data = expected
+    mock_result.output = expected
 
     with (
         patch("src.agent.agent.get_langfuse", return_value=None),
@@ -94,11 +93,13 @@ async def test_run_agent_passes_pool_as_deps(mock_pool):
     expected = _make_agent_response()
 
     mock_result = MagicMock()
-    mock_result.data = expected
+    mock_result.output = expected
 
     with (
         patch("src.agent.agent.get_langfuse", return_value=None),
-        patch("src.agent.agent.agent.run", AsyncMock(return_value=mock_result)) as mock_run,
+        patch(
+            "src.agent.agent.agent.run", AsyncMock(return_value=mock_result)
+        ) as mock_run,
     ):
         from src.agent.agent import run_agent
 
@@ -116,7 +117,7 @@ async def test_run_agent_creates_langfuse_trace_on_success(mock_pool):
     expected = _make_agent_response()
 
     mock_result = MagicMock()
-    mock_result.data = expected
+    mock_result.output = expected
     mock_result.usage.return_value = MagicMock(
         request_tokens=100,
         response_tokens=50,
@@ -203,7 +204,9 @@ async def test_search_videos_by_query_delegates_to_db(mock_pool):
     ctx = MagicMock(spec=RunContext)
     ctx.deps = mock_pool
 
-    with patch("src.agent.tools.search_videos", AsyncMock(return_value=[])) as mock_search:
+    with patch(
+        "src.agent.tools.search_videos", AsyncMock(return_value=[])
+    ) as mock_search:
         result = await search_videos_by_query(ctx, query="python tutorial")
         mock_search.assert_called_once_with(mock_pool, "python tutorial", 10)
 

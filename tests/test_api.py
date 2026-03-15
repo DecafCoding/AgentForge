@@ -8,7 +8,6 @@ services are required.
 
 from unittest.mock import AsyncMock, patch
 
-
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
@@ -63,7 +62,9 @@ async def test_ask_does_not_expose_confidence(client):
     mocked_response = AgentResponse(
         answer="Some answer.",
         sources=[
-            Source(title="Video", video_id="v1", url="https://www.youtube.com/watch?v=v1")
+            Source(
+                title="Video", video_id="v1", url="https://www.youtube.com/watch?v=v1"
+            )
         ],
         confidence=0.5,
     )

@@ -36,7 +36,10 @@ async def client(mock_pool):
     are needed. Langfuse validation is also suppressed so missing keys
     do not produce warning noise in test output.
     """
-    # Import after patching is set up so the lifespan picks up the mocks.
+    # ASGITransport sends only "http" scope events — it never triggers the ASGI
+    # lifespan protocol, so the lifespan context manager never runs and
+    # app.state.pool is never set. Inject the pool directly so route handlers
+    # that access request.app.state.pool work without a real database.
     from src.api.main import app
 
     with (
@@ -45,8 +48,10 @@ async def client(mock_pool):
         patch("src.api.main.shutdown_scheduler", AsyncMock()),
         patch("src.api.main.validate_provider_config"),
     ):
+        app.state.pool = mock_pool
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://test",
         ) as ac:
             yield ac
+        del app.state.pool

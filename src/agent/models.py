@@ -30,5 +30,5 @@ class AgentResponse(BaseModel):
     confidence: float = Field(
         ge=0.0,
         le=1.0,
-        description="Model's self-assessed confidence in the answer (0–1).",
+        description="Model's self-assessed confidence in the answer (0-1).",
     )

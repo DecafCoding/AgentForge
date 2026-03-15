@@ -14,7 +14,13 @@ import logging
 from asyncpg import Pool
 from pydantic_ai import RunContext
 
-from src.db.queries import ChannelStats, VideoSummary, get_channel_stats, get_videos, search_videos
+from src.db.queries import (
+    ChannelStats,
+    VideoSummary,
+    get_channel_stats,
+    get_videos,
+    search_videos,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +44,9 @@ async def query_recent_videos(
         List of video summaries ordered by publish date descending.
     """
     limit = min(limit, 50)
-    logger.debug("Tool: query_recent_videos", extra={"channel_id": channel_id, "limit": limit})
+    logger.debug(
+        "Tool: query_recent_videos", extra={"channel_id": channel_id, "limit": limit}
+    )
     return await get_videos(ctx.deps, channel_id, limit)
 
 
