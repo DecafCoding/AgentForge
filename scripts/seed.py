@@ -54,9 +54,7 @@ async def resolve_channel_name(channel_id: str) -> str:
             client = build(
                 "youtube", "v3", developerKey=YOUTUBE_API_KEY, cache_discovery=False
             )
-            response = (
-                client.channels().list(part="snippet", id=channel_id).execute()
-            )
+            response = client.channels().list(part="snippet", id=channel_id).execute()
             items = response.get("items", [])
             if not items:
                 return channel_id

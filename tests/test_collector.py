@@ -9,9 +9,6 @@ utility functions, and behaviour under common edge cases. External APIs
 import ast
 import pathlib
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Architectural boundary
 # ---------------------------------------------------------------------------
@@ -75,6 +72,37 @@ def test_agent_has_no_scheduler_or_http_imports():
 
     assert not violations, (
         "Agent module imports forbidden dependencies (boundary violation):\n"
+        + "\n".join(violations)
+    )
+
+
+def test_orchestration_has_no_scheduler_or_http_imports():
+    """Verify src/orchestration/ contains no apscheduler or httpx imports."""
+    forbidden = {"apscheduler", "httpx"}
+    violations: list[str] = []
+
+    orchestration_dir = pathlib.Path("src/orchestration")
+    for py_file in sorted(orchestration_dir.rglob("*.py")):
+        source = py_file.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    for pkg in forbidden:
+                        if alias.name == pkg or alias.name.startswith(f"{pkg}."):
+                            violations.append(
+                                f"{py_file}:{node.lineno}: import {alias.name}"
+                            )
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                for pkg in forbidden:
+                    if module == pkg or module.startswith(f"{pkg}."):
+                        violations.append(
+                            f"{py_file}:{node.lineno}: from {module} import ..."
+                        )
+
+    assert not violations, (
+        "Orchestration module imports forbidden dependencies (boundary violation):\n"
         + "\n".join(violations)
     )
 

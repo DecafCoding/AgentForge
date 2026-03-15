@@ -54,12 +54,8 @@ def upgrade() -> None:
         """
     )
 
-    op.execute(
-        "CREATE INDEX idx_videos_channel ON youtube_videos(channel_id)"
-    )
-    op.execute(
-        "CREATE INDEX idx_videos_published ON youtube_videos(published_at DESC)"
-    )
+    op.execute("CREATE INDEX idx_videos_channel ON youtube_videos(channel_id)")
+    op.execute("CREATE INDEX idx_videos_published ON youtube_videos(published_at DESC)")
 
 
 def downgrade() -> None:
