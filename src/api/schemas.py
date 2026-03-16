@@ -50,3 +50,24 @@ class WorkflowResponse(BaseModel):
     answer: str
     sources: list[Source]
     confidence: float
+
+
+class MemoryAskRequest(BaseModel):
+    """Request body for POST /api/ask/memory."""
+
+    question: str = Field(
+        min_length=1,
+        description="The question to ask the memory-aware agent.",
+    )
+    user_id: str = Field(
+        min_length=1,
+        description="User identifier for scoping memory context.",
+    )
+
+
+class MemoryAskResponse(BaseModel):
+    """Response body for POST /api/ask/memory."""
+
+    answer: str
+    sources: list[Source]
+    confidence: float

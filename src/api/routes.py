@@ -11,10 +11,13 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from src.agent.agent import run_agent
+from src.agent.memory_agent import run_memory_agent
 from src.api.schemas import (
     AskRequest,
     AskResponse,
     HealthResponse,
+    MemoryAskRequest,
+    MemoryAskResponse,
     ResearchRequest,
     WorkflowResponse,
 )
@@ -87,6 +90,55 @@ async def research(request: Request, body: ResearchRequest) -> WorkflowResponse:
         ) from exc
 
     return WorkflowResponse(
+        answer=response.answer,
+        sources=response.sources,
+        confidence=response.confidence,
+    )
+
+
+@router.post("/api/ask/memory", response_model=MemoryAskResponse, tags=["agent"])
+async def ask_with_memory(
+    request: Request, body: MemoryAskRequest
+) -> MemoryAskResponse:
+    """Submit a question to the memory-aware agent.
+
+    Runs a Pydantic AI agent with memory context injected from previous
+    sessions. Requires MEMORY_ENABLED=true. The interaction is stored
+    as a new memory for future retrieval.
+
+    Args:
+        request: FastAPI request object (used to access app.state).
+        body: Validated request body with question and user_id.
+
+    Returns:
+        Structured response with answer, sources, and confidence.
+    """
+    pool = request.app.state.pool
+    memory_store = getattr(request.app.state, "memory", None)
+
+    if memory_store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Memory is not enabled. Set MEMORY_ENABLED=true to use this endpoint.",
+        )
+
+    logger.info(
+        "Received memory-aware question",
+        extra={"question": body.question[:120], "user_id": body.user_id},
+    )
+
+    try:
+        response = await run_memory_agent(
+            body.question, body.user_id, pool, memory_store
+        )
+    except Exception as exc:
+        logger.error("Memory agent failed", extra={"error": str(exc)})
+        raise HTTPException(
+            status_code=500,
+            detail="Memory agent failed to process the request.",
+        ) from exc
+
+    return MemoryAskResponse(
         answer=response.answer,
         sources=response.sources,
         confidence=response.confidence,
