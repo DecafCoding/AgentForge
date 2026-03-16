@@ -17,9 +17,8 @@ load_dotenv()
 # LLM Provider
 # ---------------------------------------------------------------------------
 
-# Providers supported in Phase 1. Extend this set as new providers are added.
-# The string must match Pydantic AI's provider prefix (e.g. "openai", "groq").
-SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"openai", "groq"})
+# Supported providers. The string must match Pydantic AI's provider prefix.
+SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"openai", "groq", "ollama"})
 
 MODEL_PROVIDER: str = os.getenv("MODEL_PROVIDER", "openai")
 MODEL_NAME: str = os.getenv("MODEL_NAME", "gpt-4o")
@@ -67,13 +66,39 @@ SCRAPE_INTERVAL_MINUTES: int = int(os.getenv("SCRAPE_INTERVAL_MINUTES", "360"))
 BRAVE_SEARCH_API_KEY: str = os.getenv("BRAVE_SEARCH_API_KEY", "")
 BRAVE_SEARCH_ENABLED: bool = os.getenv("BRAVE_SEARCH_ENABLED", "true").lower() == "true"
 
+# ---------------------------------------------------------------------------
+# Ollama (Phase 4)
+# ---------------------------------------------------------------------------
+OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+# Pydantic AI's OllamaProvider reads OLLAMA_BASE_URL from the environment.
+# Mirror OLLAMA_HOST so developers only configure one variable.
+if MODEL_PROVIDER == "ollama" and not os.getenv("OLLAMA_BASE_URL"):
+    os.environ["OLLAMA_BASE_URL"] = OLLAMA_HOST
+
+# ---------------------------------------------------------------------------
+# Search Provider (Phase 4)
+# ---------------------------------------------------------------------------
+SEARCH_PROVIDER: str = os.getenv("SEARCH_PROVIDER", "brave")
+
+# ---------------------------------------------------------------------------
+# SearXNG (Phase 4)
+# ---------------------------------------------------------------------------
+SEARXNG_HOST: str = os.getenv("SEARXNG_HOST", "http://localhost:8080")
+
+# ---------------------------------------------------------------------------
+# Caching (Phase 4)
+# ---------------------------------------------------------------------------
+CACHE_ENABLED: bool = os.getenv("CACHE_ENABLED", "false").lower() == "true"
+REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
 
 def get_model_string() -> str:
     """Return the model identifier Pydantic AI expects for the configured provider.
 
     Returns:
-        A provider-prefixed model string (e.g. ``"openai:gpt-4o"`` or
-        ``"groq:llama-3.1-70b-versatile"``).
+        A provider-prefixed model string (e.g. ``"openai:gpt-4o"``,
+        ``"groq:llama-3.1-70b-versatile"``, or ``"ollama:llama3.1:8b"``).
     """
     return f"{MODEL_PROVIDER}:{MODEL_NAME}"
 
@@ -97,14 +122,17 @@ def validate_provider_config() -> None:
             sorted(SUPPORTED_PROVIDERS),
         )
 
+    # Ollama does not require an API key — only check cloud providers.
     _required_keys: dict[str, str] = {
         "openai": OPENAI_API_KEY,
         "groq": GROQ_API_KEY,
     }
-    key = _required_keys.get(MODEL_PROVIDER, "")
-    if not key:
-        logger.warning(
-            "No API key found for provider '%s'. Set %s in your environment.",
-            MODEL_PROVIDER,
-            f"{'OPENAI_API_KEY' if MODEL_PROVIDER == 'openai' else 'GROQ_API_KEY'}",
-        )
+    if MODEL_PROVIDER in _required_keys:
+        key = _required_keys[MODEL_PROVIDER]
+        if not key:
+            env_var = "OPENAI_API_KEY" if MODEL_PROVIDER == "openai" else "GROQ_API_KEY"
+            logger.warning(
+                "No API key found for provider '%s'. Set %s in your environment.",
+                MODEL_PROVIDER,
+                env_var,
+            )

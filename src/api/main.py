@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.api.routes import router
+from src.cache.client import close_cache_pool, create_cache_pool
 from src.collector.scheduler import shutdown_scheduler, start_scheduler
 from src.config import validate_provider_config
 from src.db.client import close_pool, create_pool
@@ -30,11 +31,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
       1. Create asyncpg connection pool
       2. Start APScheduler with the pool injected into collector jobs
       3. Initialise Mem0 memory client (if enabled)
+      4. Create Redis cache pool (if enabled)
 
     Shutdown order (reverse):
-      1. Release memory store reference
-      2. Stop APScheduler gracefully
-      3. Close the connection pool
+      1. Close cache pool
+      2. Release memory store reference
+      3. Stop APScheduler gracefully
+      4. Close the connection pool
     """
     logger.info("Starting up AgentForge")
     validate_provider_config()
@@ -58,10 +61,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         app.state.memory = None
 
+    try:
+        app.state.cache = await create_cache_pool()
+    except Exception as exc:
+        logger.error(
+            "Cache initialisation failed — continuing without cache",
+            extra={"error": str(exc)},
+        )
+        app.state.cache = None
+
     logger.info("AgentForge ready")
     yield
 
     logger.info("Shutting down AgentForge")
+    await close_cache_pool(getattr(app.state, "cache", None))
     app.state.memory = None
     await shutdown_scheduler()
     await close_pool(app.state.pool)

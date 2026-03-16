@@ -29,6 +29,18 @@ def mock_pool():
 
 
 @pytest.fixture
+def mock_cache():
+    """Return a mock Redis connection for cache tests."""
+    cache = AsyncMock()
+    cache.get = AsyncMock(return_value=None)
+    cache.set = AsyncMock()
+    cache.delete = AsyncMock()
+    cache.ping = AsyncMock()
+    cache.aclose = AsyncMock()
+    return cache
+
+
+@pytest.fixture
 def mock_memory_store():
     """Return a mock BaseMemoryStore with no-op async methods."""
     store = MagicMock()
@@ -56,12 +68,15 @@ async def client(mock_pool):
     with (
         patch("src.api.main.create_pool", AsyncMock(return_value=mock_pool)),
         patch("src.api.main.create_memory_client", AsyncMock(return_value=None)),
+        patch("src.api.main.create_cache_pool", AsyncMock(return_value=None)),
+        patch("src.api.main.close_cache_pool", AsyncMock()),
         patch("src.api.main.start_scheduler", AsyncMock()),
         patch("src.api.main.shutdown_scheduler", AsyncMock()),
         patch("src.api.main.validate_provider_config"),
     ):
         app.state.pool = mock_pool
         app.state.memory = None  # Memory disabled in API tests by default
+        app.state.cache = None  # Cache disabled in API tests by default
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://test",
@@ -70,3 +85,5 @@ async def client(mock_pool):
         del app.state.pool
         if hasattr(app.state, "memory"):
             del app.state.memory
+        if hasattr(app.state, "cache"):
+            del app.state.cache
