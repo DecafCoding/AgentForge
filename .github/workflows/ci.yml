@@ -70,6 +70,11 @@ jobs:
       SCRAPE_INTERVAL_MINUTES: "360"
       BRAVE_SEARCH_API_KEY: ""
       BRAVE_SEARCH_ENABLED: "false"
+      OLLAMA_HOST: ""
+      SEARCH_PROVIDER: "brave"
+      SEARXNG_HOST: ""
+      CACHE_ENABLED: "false"
+      REDIS_URL: ""
 
     steps:
       - uses: actions/checkout@v4

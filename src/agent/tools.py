@@ -98,11 +98,11 @@ async def web_search(
     query: str,
     count: int = 5,
 ) -> list[dict]:
-    """Search the web for real-time information using Brave Search.
+    """Search the web for real-time information.
 
-    Use this tool when the user's question requires up-to-date information
-    not available in the collected video database — current events, recent
-    news, or topics beyond YouTube content.
+    Routes to Brave Search or SearXNG based on the SEARCH_PROVIDER
+    configuration. Use this tool when the user's question requires
+    up-to-date information not available in the collected video database.
 
     Args:
         ctx: Injected run context carrying the database pool.
@@ -112,8 +112,20 @@ async def web_search(
     Returns:
         List of search result dicts with title, url, and description.
     """
-    from src.search.brave import search_web as brave_search
+    from src.config import SEARCH_PROVIDER
 
-    logger.debug("Tool: web_search", extra={"query": query})
-    results = await brave_search(query, count=min(count, 20))
+    logger.debug(
+        "Tool: web_search", extra={"query": query, "provider": SEARCH_PROVIDER}
+    )
+    count = min(count, 20)
+
+    if SEARCH_PROVIDER == "searxng":
+        from src.search.searxng import search_web as searxng_search
+
+        results = await searxng_search(query, count=count)
+    else:
+        from src.search.brave import search_web as brave_search
+
+        results = await brave_search(query, count=count)
+
     return [r.model_dump() for r in results]
