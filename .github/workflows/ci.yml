@@ -68,6 +68,8 @@ jobs:
       MEMORY_MODEL: "gpt-4o-mini"
       SCRAPE_URLS: ""
       SCRAPE_INTERVAL_MINUTES: "360"
+      BRAVE_SEARCH_API_KEY: ""
+      BRAVE_SEARCH_ENABLED: "false"
 
     steps:
       - uses: actions/checkout@v4

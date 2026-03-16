@@ -61,6 +61,12 @@ SCRAPE_URLS: list[str] = [
 ]
 SCRAPE_INTERVAL_MINUTES: int = int(os.getenv("SCRAPE_INTERVAL_MINUTES", "360"))
 
+# ---------------------------------------------------------------------------
+# Web Search (Phase 3)
+# ---------------------------------------------------------------------------
+BRAVE_SEARCH_API_KEY: str = os.getenv("BRAVE_SEARCH_API_KEY", "")
+BRAVE_SEARCH_ENABLED: bool = os.getenv("BRAVE_SEARCH_ENABLED", "true").lower() == "true"
+
 
 def get_model_string() -> str:
     """Return the model identifier Pydantic AI expects for the configured provider.

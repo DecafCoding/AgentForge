@@ -90,6 +90,8 @@ services:
       MEMORY_MODEL: ${MEMORY_MODEL:-gpt-4o-mini}
       SCRAPE_URLS: ${SCRAPE_URLS:-}
       SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-360}
+      BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
+      BRAVE_SEARCH_ENABLED: ${BRAVE_SEARCH_ENABLED:-true}
     depends_on:
       supabase-db:
         condition: service_healthy

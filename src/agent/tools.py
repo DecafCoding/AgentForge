@@ -91,3 +91,29 @@ async def get_channel_statistics(
     """
     logger.debug("Tool: get_channel_statistics", extra={"channel_id": channel_id})
     return await get_channel_stats(ctx.deps, channel_id)
+
+
+async def web_search(
+    ctx: RunContext[Pool],
+    query: str,
+    count: int = 5,
+) -> list[dict]:
+    """Search the web for real-time information using Brave Search.
+
+    Use this tool when the user's question requires up-to-date information
+    not available in the collected video database — current events, recent
+    news, or topics beyond YouTube content.
+
+    Args:
+        ctx: Injected run context carrying the database pool.
+        query: Search query string.
+        count: Maximum number of results to return (default 5, max 20).
+
+    Returns:
+        List of search result dicts with title, url, and description.
+    """
+    from src.search.brave import search_web as brave_search
+
+    logger.debug("Tool: web_search", extra={"query": query})
+    results = await brave_search(query, count=min(count, 20))
+    return [r.model_dump() for r in results]
