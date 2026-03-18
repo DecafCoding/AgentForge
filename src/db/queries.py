@@ -367,3 +367,72 @@ async def get_scraped_page(pool: Pool, url: str) -> ScrapedPageRecord | None:
     if row is None:
         return None
     return ScrapedPageRecord(**dict(row))
+
+
+# ---------------------------------------------------------------------------
+# Evaluation run queries
+# ---------------------------------------------------------------------------
+
+
+class EvaluationRunRecord(BaseModel):
+    """A row from the evaluation_runs table."""
+
+    id: UUID
+    ran_at: datetime
+    dataset_size: int
+    results: dict
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime
+
+
+async def upsert_evaluation_run(
+    pool: Pool,
+    dataset_size: int,
+    results: dict,
+    metadata: dict | None = None,
+) -> None:
+    """Insert an evaluation run result for historical tracking.
+
+    Args:
+        pool: asyncpg connection pool.
+        dataset_size: Number of samples evaluated.
+        results: Dict of metric name → score from Ragas.
+        metadata: Optional context (model used, trace filter, etc.).
+    """
+    import json
+
+    await pool.execute(
+        """
+        INSERT INTO evaluation_runs (dataset_size, results, metadata)
+        VALUES ($1, $2::jsonb, $3::jsonb)
+        """,
+        dataset_size,
+        json.dumps(results),
+        json.dumps(metadata or {}),
+    )
+    logger.debug("Inserted evaluation run", extra={"dataset_size": dataset_size})
+
+
+async def get_evaluation_runs(
+    pool: Pool,
+    limit: int = 20,
+) -> list[EvaluationRunRecord]:
+    """Fetch recent evaluation run records ordered by date descending.
+
+    Args:
+        pool: asyncpg connection pool.
+        limit: Maximum number of records to return.
+
+    Returns:
+        List of evaluation run records.
+    """
+    rows = await pool.fetch(
+        """
+        SELECT id, ran_at, dataset_size, results, metadata, created_at
+        FROM evaluation_runs
+        ORDER BY ran_at DESC
+        LIMIT $1
+        """,
+        limit,
+    )
+    return [EvaluationRunRecord(**dict(row)) for row in rows]

@@ -92,6 +92,18 @@ SEARXNG_HOST: str = os.getenv("SEARXNG_HOST", "http://localhost:8080")
 CACHE_ENABLED: bool = os.getenv("CACHE_ENABLED", "false").lower() == "true"
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+# ---------------------------------------------------------------------------
+# Evaluation (Phase 5)
+# ---------------------------------------------------------------------------
+EVAL_MODEL: str = os.getenv("EVAL_MODEL", "gpt-4o")
+EVAL_DATASET_LIMIT: int = int(os.getenv("EVAL_DATASET_LIMIT", "100"))
+
+# ---------------------------------------------------------------------------
+# MCP Server (Phase 5)
+# ---------------------------------------------------------------------------
+MCP_TRANSPORT: str = os.getenv("MCP_TRANSPORT", "stdio")
+MCP_PORT: int = int(os.getenv("MCP_PORT", "8001"))
+
 
 def get_model_string() -> str:
     """Return the model identifier Pydantic AI expects for the configured provider.
