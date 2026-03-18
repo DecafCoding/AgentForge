@@ -86,10 +86,10 @@ async def test_research_endpoint_returns_workflow_response(client):
 
 
 async def test_health_endpoint_returns_ok(client):
-    """GET /health returns 200 with status 'ok'."""
+    """GET /health returns 200 with healthy status."""
     response = await client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    assert response.json()["status"] == "healthy"
 
 
 async def test_ask_endpoint_rejects_empty_question(client):

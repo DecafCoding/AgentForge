@@ -33,6 +33,8 @@ class HealthResponse(BaseModel):
     """Response body for GET /health."""
 
     status: str
+    database: str = "unknown"
+    version: str = "0.6.0"
 
 
 class ResearchRequest(BaseModel):

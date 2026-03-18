@@ -23,6 +23,7 @@ def mock_pool():
     pool = MagicMock()
     pool.fetch = AsyncMock(return_value=[])
     pool.fetchrow = AsyncMock(return_value=None)
+    pool.fetchval = AsyncMock(return_value=1)
     pool.execute = AsyncMock(return_value=None)
     pool.close = AsyncMock()
     return pool

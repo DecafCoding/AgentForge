@@ -29,9 +29,23 @@ router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse, tags=["meta"])
-async def health() -> HealthResponse:
-    """Return service health status."""
-    return HealthResponse(status="ok")
+async def health(request: Request) -> HealthResponse:
+    """Health check endpoint for Docker and load balancers."""
+    pool = getattr(request.app.state, "pool", None)
+    db_status = "unknown"
+
+    if pool is not None:
+        try:
+            await pool.fetchval("SELECT 1")
+            db_status = "healthy"
+        except Exception:
+            db_status = "unhealthy"
+
+    return HealthResponse(
+        status="healthy" if db_status != "unhealthy" else "degraded",
+        database=db_status,
+        version="0.6.0",
+    )
 
 
 @router.post("/api/ask", response_model=AskResponse, tags=["agent"])
