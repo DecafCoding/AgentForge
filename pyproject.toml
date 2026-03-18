@@ -33,6 +33,10 @@ dependencies = [
     "youtube-transcript-api>=0.6.0",
     # Caching (Phase 4 — only used when CACHE_ENABLED=true)
     "redis>=5.0.0",
+    # Evaluation (Phase 5)
+    "ragas>=0.2.0",
+    "fastmcp>=2.0.0",
+    "langchain-openai>=0.2.0",
 ]
 
 [dependency-groups]
@@ -41,6 +45,11 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
 ]
+
+[tool.uv]
+# mistralai 2.0.x has a packaging bug (no root __init__.py), breaking
+# instructor's `from mistralai import Mistral` import. Pin to 1.x until fixed.
+override-dependencies = ["mistralai>=1.2.0,<2.0.0"]
 
 [build-system]
 requires = ["hatchling"]
