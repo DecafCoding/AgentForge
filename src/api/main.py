@@ -12,11 +12,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import router
 from src.cache.client import close_cache_pool, create_cache_pool
 from src.collector.scheduler import shutdown_scheduler, start_scheduler
-from src.config import validate_provider_config
+from src.config import CORS_ORIGINS, validate_provider_config
 from src.db.client import close_pool, create_pool
 from src.memory.client import create_memory_client
 
@@ -96,6 +97,14 @@ def create_app() -> FastAPI:
         ),
         version="0.1.0",
         lifespan=lifespan,
+    )
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in CORS_ORIGINS.split(",")],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     application.include_router(router)

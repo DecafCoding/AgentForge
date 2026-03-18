@@ -14,11 +14,14 @@ from unittest.mock import AsyncMock, patch
 
 
 async def test_health_returns_200(client):
-    """GET /health returns 200 with status ok."""
+    """GET /health returns 200 with healthy status."""
     response = await client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert "database" in data
+    assert data["version"] == "0.6.0"
 
 
 # ---------------------------------------------------------------------------

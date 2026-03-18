@@ -93,11 +93,6 @@ So that <benefit/value>
   The -u sets the upstream so future git push / git pull on this branch need no extra args.
 
 
-**If Planning a New Feature (not bug fix):**
-- Read `.agents/reference/new-features.md` for platform-specific patterns
-- Understand interface requirements (IPlatformAdapter, IAssistantClient)
-- Review extension patterns for adapters, clients, commands, database operations
-
 **4. Testing Patterns**
 
 - Identify test framework and structure (pytest, jest, etc.)
@@ -138,12 +133,6 @@ So that <benefit/value>
 - Identify performance optimization patterns
 - Document security considerations
 
-**If Archon RAG is available and relevant:**
-- Use `mcp__archon__rag_get_available_sources()` to see available documentation
-- Search for relevant patterns: `mcp__archon__rag_search_knowledge_base(query="...")`
-- Find code examples: `mcp__archon__rag_search_code_examples(query="...")`
-- Focus on implementation patterns, best practices, and similar features
-
 **Compile Research References:**
 
 ```markdown
@@ -177,17 +166,15 @@ So that <benefit/value>
 - Consider scalability implications
 
 **PRD Validation (if PRD exists):**
-- Read `.agents/PRD.md` if it exists in the project
+- Read PRD — check `.agents/PRD.md` first, then `docs/PRD.md` as fallback
 - Verify plan preserves architectural patterns defined in PRD
-- Ensure interface abstractions (IPlatformAdapter, IAssistantClient, etc.) are included in types section
-- Confirm implementation uses interface types, not concrete classes in core logic
 - Validate against any architectural principles or design constraints in PRD
 
 ### Phase 5: Plan Structure Generation
 
 **Create comprehensive plan with the following structure:**
 
-Whats below here is a template for you to fill for th4e implementation agent:
+Whats below here is a template for you to fill for the implementation agent:
 
 ```markdown
 # Feature: <feature-name>
@@ -365,14 +352,11 @@ Execute every command to ensure zero regressions and 100% feature correctness.
 ### Level 1: Syntax & Style
 
 ```bash
-# TypeScript type checking
-npm run type-check
+# Lint (must pass with 0 errors)
+uv run ruff check .
 
-# ESLint (must pass with 0 errors)
-npm run lint
-
-# Prettier formatting check
-npm run format:check
+# Format check
+uv run ruff format --check .
 ```
 
 **Expected**: All commands pass with exit code 0
@@ -416,16 +400,13 @@ npm run format:check
 - [ ] All tasks completed in order
 - [ ] Each task validation passed immediately
 - [ ] All validation commands executed successfully:
-  - [ ] Level 1: type-check, lint, format:check
-  - [ ] Level 2: test, test with coverage
-  - [ ] Level 3: build, dist/ verification
-  - [ ] Level 4: Manual script testing
-  - [ ] Level 5: Config validation
+  - [ ] Level 1: ruff check, ruff format --check
+  - [ ] Level 2: pytest (unit tests)
+  - [ ] Level 3: pytest (integration tests)
+  - [ ] Level 4: Manual validation
 - [ ] Full test suite passes (unit + integration)
-- [ ] No linting errors (npm run lint)
-- [ ] No formatting errors (npm run format:check)
-- [ ] No type checking errors (npm run type-check)
-- [ ] Build succeeds (npm run build)
+- [ ] No linting errors (uv run ruff check .)
+- [ ] No formatting errors (uv run ruff format --check .)
 - [ ] All acceptance criteria met
 - [ ] Code reviewed for quality and maintainability
 

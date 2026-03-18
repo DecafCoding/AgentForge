@@ -104,6 +104,12 @@ EVAL_DATASET_LIMIT: int = int(os.getenv("EVAL_DATASET_LIMIT", "100"))
 MCP_TRANSPORT: str = os.getenv("MCP_TRANSPORT", "stdio")
 MCP_PORT: int = int(os.getenv("MCP_PORT", "8001"))
 
+# ---------------------------------------------------------------------------
+# Frontend & Deployment (Phase 6)
+# ---------------------------------------------------------------------------
+CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+DOMAIN: str = os.getenv("DOMAIN", "localhost")
+
 
 def get_model_string() -> str:
     """Return the model identifier Pydantic AI expects for the configured provider.
