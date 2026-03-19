@@ -1,0 +1,25 @@
+{$DOMAIN:localhost} {
+
+    # API — proxy to FastAPI backend.
+    # Uses handle (not handle_path) to preserve the /api/ prefix,
+    # which FastAPI routes expect in full.
+    handle /api/* {
+        reverse_proxy app:8000
+    }
+
+    # Health check — proxy to FastAPI backend.
+    handle /health {
+        reverse_proxy app:8000
+    }
+
+    # Langfuse — optional observability UI.
+    # Only accessible if langfuse-server is running.
+    handle /langfuse/* {
+        reverse_proxy langfuse-server:3000
+    }
+
+    # Frontend — serves the React SPA (default catch-all handler).
+    handle {
+        reverse_proxy frontend:80
+    }
+}
