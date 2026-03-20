@@ -99,7 +99,8 @@ docker compose --profile bundled restart app
 ### 6 — Seed channels and collect data
 
 ```bash
-uv run python scripts/seed.py UCddiULmld79aDgK4aCiVDsw  # e.g. Fireship
+uv run python scripts/seed.py @Fireship               # YouTube handle
+uv run python scripts/seed.py UCddiULmld79aDgK4aCiVDsw  # or channel ID
 uv run python scripts/collect.py
 ```
 
