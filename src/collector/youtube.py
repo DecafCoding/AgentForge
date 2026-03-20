@@ -20,6 +20,7 @@ Collection strategy:
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 
 from asyncpg import Pool
@@ -146,7 +147,13 @@ class YouTubeCollector(BaseCollector):
             )
 
             if is_new or not has_transcript:
-                video.transcript = await self._fetch_transcript(video.video_id)
+                if _duration_seconds(video.duration) >= 3600:
+                    logger.debug(
+                        "Skipping transcript — video is 1 hour or longer",
+                        extra={"video_id": video.video_id, "duration": video.duration},
+                    )
+                else:
+                    video.transcript = await self._fetch_transcript(video.video_id)
 
             await queries.upsert_video(
                 self._pool,
@@ -314,3 +321,28 @@ def _safe_int(value: str | None) -> int | None:
         return int(value)
     except (ValueError, TypeError):
         return None
+
+
+def _duration_seconds(duration: str | None) -> int:
+    """Parse an ISO 8601 duration string and return total seconds.
+
+    Handles the YouTube API format (e.g. ``PT1H30M15S``). Returns 0 if
+    the value is None or cannot be parsed, which allows the caller to
+    treat unknown durations as short and attempt a transcript fetch.
+
+    Args:
+        duration: ISO 8601 duration string from the YouTube contentDetails API.
+
+    Returns:
+        Total duration in seconds, or 0 if unparseable.
+    """
+    if not duration:
+        return 0
+    match = re.fullmatch(
+        r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?",
+        duration,
+    )
+    if not match:
+        return 0
+    days, hours, minutes, seconds = (int(v) if v else 0 for v in match.groups())
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds
