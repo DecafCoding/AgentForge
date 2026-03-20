@@ -29,6 +29,7 @@ class ChannelRecord(BaseModel):
     channel_id: str
     channel_name: str
     created_at: datetime
+    last_checked_at: datetime | None = None
 
 
 class VideoRecord(BaseModel):
@@ -91,10 +92,92 @@ class ChannelStats(BaseModel):
 async def get_channels(pool: Pool) -> list[ChannelRecord]:
     """Return all tracked YouTube channels ordered by creation date."""
     rows = await pool.fetch(
-        "SELECT id, channel_id, channel_name, created_at "
+        "SELECT id, channel_id, channel_name, created_at, last_checked_at "
         "FROM youtube_channels ORDER BY created_at ASC",
     )
     return [ChannelRecord(**dict(row)) for row in rows]
+
+
+async def get_next_channel_to_check(
+    pool: Pool,
+    min_age_days: int = 3,
+) -> ChannelRecord | None:
+    """Return the next channel due for a collection check.
+
+    Selection priority:
+      1. Channels where last_checked_at IS NULL (never checked), oldest created first.
+      2. Channels where last_checked_at is older than min_age_days, oldest check first.
+      3. None if all channels were checked within min_age_days.
+
+    Args:
+        pool: asyncpg connection pool.
+        min_age_days: Minimum days since last check before a channel is eligible.
+
+    Returns:
+        The next channel to check, or None if no channel is due.
+    """
+    row = await pool.fetchrow(
+        """
+        SELECT id, channel_id, channel_name, created_at, last_checked_at
+        FROM youtube_channels
+        WHERE last_checked_at IS NULL
+           OR last_checked_at < NOW() - ($1 || ' days')::INTERVAL
+        ORDER BY last_checked_at ASC NULLS FIRST, created_at ASC
+        LIMIT 1
+        """,
+        str(min_age_days),
+    )
+    if row is None:
+        return None
+    return ChannelRecord(**dict(row))
+
+
+async def mark_channel_checked(pool: Pool, channel_id: str) -> None:
+    """Update last_checked_at to now for the given channel.
+
+    Args:
+        pool: asyncpg connection pool.
+        channel_id: YouTube channel identifier.
+    """
+    await pool.execute(
+        "UPDATE youtube_channels SET last_checked_at = NOW() WHERE channel_id = $1",
+        channel_id,
+    )
+    logger.debug("Marked channel checked", extra={"channel_id": channel_id})
+
+
+async def video_exists(pool: Pool, video_id: str) -> bool:
+    """Return True if a video with the given ID is already in the database.
+
+    Args:
+        pool: asyncpg connection pool.
+        video_id: YouTube video identifier.
+
+    Returns:
+        True if the video exists, False otherwise.
+    """
+    result = await pool.fetchval(
+        "SELECT EXISTS(SELECT 1 FROM youtube_videos WHERE video_id = $1)",
+        video_id,
+    )
+    return bool(result)
+
+
+async def video_has_transcript(pool: Pool, video_id: str) -> bool:
+    """Return True if the video already has a non-empty transcript stored.
+
+    Args:
+        pool: asyncpg connection pool.
+        video_id: YouTube video identifier.
+
+    Returns:
+        True if a transcript exists, False if missing or video not found.
+    """
+    result = await pool.fetchval(
+        "SELECT transcript IS NOT NULL FROM youtube_videos WHERE video_id = $1",
+        video_id,
+    )
+    return bool(result)
 
 
 async def upsert_channel(pool: Pool, channel_id: str, channel_name: str) -> None:

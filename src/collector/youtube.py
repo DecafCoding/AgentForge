@@ -8,6 +8,14 @@ observability dependencies.
 
 Sync API clients (googleapiclient, youtube_transcript_api) are wrapped in
 asyncio.to_thread() so they do not block the event loop.
+
+Collection strategy:
+  - One channel is checked per scheduler run (every 60 minutes).
+  - Priority: null last_checked_at first, then oldest last_checked_at.
+  - A channel is skipped if it was checked within the last 3 days.
+  - Only the 5 most recent videos are fetched per check.
+  - Transcripts are only fetched for videos not already in the database,
+    or for existing videos that have no transcript stored.
 """
 
 import asyncio
@@ -30,13 +38,20 @@ from src.db import queries
 logger = logging.getLogger(__name__)
 
 # Maximum videos to fetch per channel per collection cycle.
-_MAX_RESULTS_PER_CHANNEL = 25
+_MAX_RESULTS_PER_CHANNEL = 5
+
+# Minimum days between checks for the same channel.
+_MIN_CHECK_AGE_DAYS = 3
 
 
 class YouTubeCollector(BaseCollector):
     """Collects video metadata and transcripts from YouTube channels.
 
     Implements the BaseCollector interface for scheduled data collection.
+    Checks one channel per run, prioritising channels that have never been
+    checked or have the oldest last_checked_at timestamp. Channels checked
+    within the last three days are skipped entirely.
+
     Uses the YouTube Data API v3 for metadata and youtube-transcript-api
     for transcripts. Both clients are synchronous and are run in a thread
     pool via asyncio.to_thread(). Stores results via src.db.queries.
@@ -63,34 +78,44 @@ class YouTubeCollector(BaseCollector):
         return self._youtube_client
 
     async def collect(self) -> int:
-        """Run a collection cycle for all channels stored in the database.
+        """Check the next eligible channel and collect its recent videos.
+
+        Selects one channel per run using last_checked_at priority. Skips
+        if no channel is due (all checked within the last three days).
 
         Returns:
-            Total number of videos upserted across all channels.
+            Number of videos upserted, or 0 if no channel was due.
         """
         if not self._api_key:
             logger.warning("YOUTUBE_API_KEY is not set — skipping collection")
             return 0
 
-        channels = await queries.get_channels(self._pool)
-        if not channels:
-            logger.info("No channels configured — skipping collection")
+        channel = await queries.get_next_channel_to_check(
+            self._pool,
+            min_age_days=_MIN_CHECK_AGE_DAYS,
+        )
+
+        if channel is None:
+            logger.info(
+                "No channels due for collection — all checked within %d days",
+                _MIN_CHECK_AGE_DAYS,
+            )
             return 0
 
-        total = 0
-        for channel in channels:
-            try:
-                count = await self._collect_channel(channel.channel_id)
-                total += count
-            except Exception as exc:
-                # Log and continue — one failed channel must not abort others.
-                logger.error(
-                    "Failed to collect channel",
-                    extra={"channel_id": channel.channel_id, "error": str(exc)},
-                )
+        try:
+            count = await self._collect_channel(channel.channel_id)
+        except Exception as exc:
+            logger.error(
+                "Failed to collect channel",
+                extra={"channel_id": channel.channel_id, "error": str(exc)},
+            )
+            count = 0
+        finally:
+            # Always update last_checked_at so the channel moves to the back
+            # of the queue, even if the collection partially failed.
+            await queries.mark_channel_checked(self._pool, channel.channel_id)
 
-        logger.info("Collection cycle complete", extra={"total_videos": total})
-        return total
+        return count
 
     async def _collect_channel(self, channel_id: str) -> int:
         """Fetch and store recent videos for a single channel.
@@ -113,7 +138,16 @@ class YouTubeCollector(BaseCollector):
 
         count = 0
         for video in videos:
-            video.transcript = await self._fetch_transcript(video.video_id)
+            is_new = not await queries.video_exists(self._pool, video.video_id)
+            has_transcript = (
+                False
+                if is_new
+                else await queries.video_has_transcript(self._pool, video.video_id)
+            )
+
+            if is_new or not has_transcript:
+                video.transcript = await self._fetch_transcript(video.video_id)
+
             await queries.upsert_video(
                 self._pool,
                 video_id=video.video_id,
